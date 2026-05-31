@@ -1,0 +1,136 @@
+# TIN Collection Portal — local development stack (Sprint 0).
+# Run from repo root:  docker compose -f infra/compose/docker-compose.yml --env-file backend/.env up --build
+# (copy backend/.env.example -> backend/.env first)
+#
+# Build contexts are relative to this file (infra/compose/), hence ../../backend etc.
+
+name: tin-portal
+
+services:
+  proxy:
+    image: traefik:v3.1
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --api.insecure=true
+    ports:
+      - "80:80"
+      - "8090:8080" # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - web
+      - api
+
+  web:
+    build:
+      context: ../../frontend
+    environment:
+      NEXT_PUBLIC_API_BASE: /api/v1
+    expose:
+      - "3000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.web.rule=PathPrefix(`/`)
+      - traefik.http.routers.web.priority=1
+      - traefik.http.routers.web.entrypoints=web
+      - traefik.http.services.web.loadbalancer.server.port=3000
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ../../backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file:
+      - path: ../../backend/.env
+        required: false
+    expose:
+      - "8000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.api.rule=PathPrefix(`/api`)
+      - traefik.http.routers.api.priority=10
+      - traefik.http.routers.api.entrypoints=web
+      - traefik.http.services.api.loadbalancer.server.port=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      storage:
+        condition: service_started
+
+  worker:
+    build:
+      context: ../../backend
+    command: arq app.worker.WorkerSettings
+    env_file:
+      - path: ../../backend/.env
+        required: false
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: ../../backend
+    command: arq app.scheduler.SchedulerSettings
+    env_file:
+      - path: ../../backend/.env
+        required: false
+    depends_on:
+      redis:
+        condition: service_started
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: tin
+      POSTGRES_PASSWORD: tin
+      POSTGRES_DB: tin
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  storage:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio:/data
+
+  mail:
+    image: axllent/mailpit
+    ports:
+      - "8025:8025" # web UI
+      - "1025:1025" # SMTP
+
+volumes:
+  pgdata:
+  minio:

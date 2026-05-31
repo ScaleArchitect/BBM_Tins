@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-primary: #0f2742;
+  --brand-secondary: #2f6fb0;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
