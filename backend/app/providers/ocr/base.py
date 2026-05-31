@@ -6,13 +6,13 @@ canonical certificate fields. Raw provider output is preserved for audit/repro.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol
 
 from pydantic import BaseModel
 
 
-class CertType(str, Enum):
+class CertType(StrEnum):
     VAT = "VAT"
     CT = "CT"
 

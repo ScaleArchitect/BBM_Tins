@@ -7,10 +7,10 @@ can declare required permissions as they are built.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     PLATFORM_OWNER = "PLATFORM_OWNER"
     PLATFORM_ADMIN = "PLATFORM_ADMIN"
     COMPANY_OWNER = "COMPANY_OWNER"
@@ -19,7 +19,7 @@ class Role(str, Enum):
     BUSINESS_CUSTOMER = "BUSINESS_CUSTOMER"
 
 
-class Permission(str, Enum):
+class Permission(StrEnum):
     MANAGE_COMPANIES = "manage_companies"
     MANAGE_CUSTOMERS = "manage_customers"
     SEND_INVITATIONS = "send_invitations"
