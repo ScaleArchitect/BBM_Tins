@@ -53,7 +53,15 @@ def create_app() -> FastAPI:
     configure_logging()
     get_logger("app").info("starting", app_env=settings.app_env)
 
-    app = FastAPI(title="TIN Collection Portal API", version="0.0.0")
+    # Serve OpenAPI/Swagger under the API prefix so they are reachable through
+    # the reverse proxy (which routes /api -> backend, / -> frontend).
+    app = FastAPI(
+        title="TIN Collection Portal API",
+        version="0.0.0",
+        docs_url=f"{settings.api_v1_prefix}/docs",
+        redoc_url=f"{settings.api_v1_prefix}/redoc",
+        openapi_url=f"{settings.api_v1_prefix}/openapi.json",
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

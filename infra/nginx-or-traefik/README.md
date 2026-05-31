@@ -1,8 +1,12 @@
 # Reverse proxy
 
 Local development uses **Traefik** (see `infra/compose/docker-compose.yml`),
-configured entirely via container labels + command flags — no static config file
-is required for Sprint 0.
+configured via the **file provider** (`traefik.yml` static + `dynamic.yml`
+dynamic, mounted into the container). The file provider is used instead of the
+docker-socket provider because the latter is unreliable on Docker Desktop /
+Windows (`Failed to retrieve information of the docker client and server host`)
+and would require giving the proxy access to the docker daemon. Services are
+reached by their compose DNS names (`http://api:8000`, `http://web:3000`).
 
 ## Routing
 

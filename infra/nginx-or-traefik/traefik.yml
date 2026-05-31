@@ -1,0 +1,20 @@
+# Traefik v3 static configuration (local dev).
+# Uses the FILE provider (not the docker socket) so routing works reliably on
+# all platforms incl. Docker Desktop / Windows, and the proxy needs no access to
+# the docker daemon. Services are reached by their compose DNS names.
+
+entryPoints:
+  web:
+    address: ":80"
+
+api:
+  dashboard: true
+  insecure: true # local only — dashboard on :8080 (published as 8090)
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+log:
+  level: INFO
