@@ -18,7 +18,9 @@ from app.core.config import get_settings
 # Import model modules so they register on Base.metadata for autogenerate.
 from app.domains.admins import models as _admins_models  # noqa: F401,E402
 from app.domains.audit import models as _audit_models  # noqa: F401,E402
+from app.domains.auth import models as _auth_models  # noqa: F401,E402
 from app.domains.companies import models as _companies_models  # noqa: F401,E402
+from app.domains.platform import models as _platform_models  # noqa: F401,E402
 from app.models.base import Base
 
 config = context.config

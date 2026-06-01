@@ -1,12 +1,18 @@
 """Aggregates all v1 domain routers under ``/api/v1``.
 
-Empty in Sprint 0 — domain routers (auth, platform, admin, portal, ...) are
-mounted here as they are built in later sprints (docs/architecture/04, 06).
+Sprint 2 mounts admin auth, platform tenant management, and company-admin
+management (users, branding, settings). Customer portal + certificate routes
+arrive in later sprints.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
+
+from app.domains.admins.router import router as admins_router
+from app.domains.auth.router import router as auth_router
+from app.domains.companies.router import router as companies_router
+from app.domains.platform.router import router as platform_router
 
 api_router = APIRouter()
 
@@ -16,8 +22,7 @@ async def api_root() -> dict[str, str]:
     return {"service": "tin-portal", "version": "v1"}
 
 
-# Later sprints:
-# api_router.include_router(auth_router)
-# api_router.include_router(platform_router, prefix="/platform")
-# api_router.include_router(admin_router, prefix="/admin")
-# api_router.include_router(portal_router, prefix="/portal")
+api_router.include_router(auth_router)
+api_router.include_router(platform_router)
+api_router.include_router(admins_router)
+api_router.include_router(companies_router)

@@ -49,12 +49,30 @@ class Settings(BaseSettings):
     email_from: str = "TIN Portal <no-reply@tinportal.local>"
 
     # --- security / auth ---
+    # RS256 with keys from Key Vault in prod. Locally, if the PEM files are
+    # absent, an ephemeral keypair is generated at startup (see core/security).
+    jwt_algorithm: str = "RS256"
     jwt_private_key_path: str = "/run/secrets/jwt_private.pem"
     jwt_public_key_path: str = "/run/secrets/jwt_public.pem"
+    jwt_issuer: str = "tin-portal"
+    jwt_access_ttl_seconds: int = 900  # 15 min
+    jwt_refresh_ttl_seconds: int = 604800  # 7 days
     otp_pepper: str = "change-me-32-bytes"
     otp_ttl_seconds: int = 600
     otp_max_attempts: int = 3
     otp_lockout_seconds: int = 1800
+
+    # --- admin login throttling (docs/architecture/02 §8.6) ---
+    login_max_attempts: int = 5
+    login_attempt_window_seconds: int = 900  # rolling window for counting failures
+    login_lockout_seconds: int = 900  # cooldown once the cap is hit
+
+    # --- public base URL (invitation / set-password links) ---
+    public_base_url: str = "http://localhost"
+
+    # --- dev bootstrap: first platform admin (seeded by `python -m app.seed`) ---
+    platform_bootstrap_email: str = "platform@tinportal.local"
+    platform_bootstrap_password: str = "ChangeMe!Platform1"
 
     # --- uploads ---
     max_upload_mb: int = 10

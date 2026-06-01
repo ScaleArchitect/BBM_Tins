@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from uuid import UUID
 
+from fastapi import Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import get_settings
+from app.core.security import Principal, get_current_principal
 from app.core.tenancy import set_current_company_id
 
 _engine: AsyncEngine | None = None
@@ -63,6 +65,38 @@ async def tenant_session(company_id: UUID) -> AsyncIterator[AsyncSession]:
         async with get_sessionmaker()() as session:
             async with session.begin():
                 await set_current_company(session, company_id)
+                yield session
+    finally:
+        set_current_company_id(None)
+
+
+async def get_request_session() -> AsyncIterator[AsyncSession]:
+    """Transactional session for non-tenant routes (auth, platform).
+
+    Opens one transaction that commits on success / rolls back on error. No RLS
+    GUC is set, so RLS-protected tables return nothing unless the caller sets the
+    tenant context explicitly (e.g. the platform path seeding a new tenant's rows).
+    """
+    async with get_sessionmaker()() as session:
+        async with session.begin():
+            yield session
+
+
+async def get_tenant_session(
+    principal: Principal = Depends(get_current_principal),
+) -> AsyncIterator[AsyncSession]:
+    """Transactional, tenant-bound session for company-admin routes.
+
+    Sets the request context var AND the transaction-local RLS GUC from the
+    authenticated principal's ``company_id`` (defence in depth). Rejects principals
+    without a tenant scope (e.g. platform admins hitting a tenant route)."""
+    if principal.company_id is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Tenant scope required")
+    set_current_company_id(principal.company_id)
+    try:
+        async with get_sessionmaker()() as session:
+            async with session.begin():
+                await set_current_company(session, principal.company_id)
                 yield session
     finally:
         set_current_company_id(None)

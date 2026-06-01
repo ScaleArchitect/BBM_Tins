@@ -25,6 +25,8 @@ services:
       context: ../../frontend
     environment:
       NEXT_PUBLIC_API_BASE: /api/v1
+      # Server-side BFF reaches the backend directly (not via the public proxy).
+      API_INTERNAL_URL: http://api:8000/api/v1
     expose:
       - "3000"
     depends_on:
@@ -44,6 +46,22 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: "no"
+
+  # One-shot: bootstrap the first platform admin (idempotent). Connects as the
+  # RLS-enforced app role; platform_admins is not tenant-scoped.
+  seed:
+    build:
+      context: ../../backend
+    command: python -m app.seed
+    env_file:
+      - path: ../../backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tin_app:tin_app@db:5432/tin
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: "no"
 
   api:
