@@ -14,10 +14,12 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
 from app.core.config import get_settings
-from app.models.base import Base
 
-# Import model modules here as they are created so they register on Base.metadata.
-# e.g. from app.domains.companies import models as _companies_models  # noqa
+# Import model modules so they register on Base.metadata for autogenerate.
+from app.domains.admins import models as _admins_models  # noqa: F401,E402
+from app.domains.audit import models as _audit_models  # noqa: F401,E402
+from app.domains.companies import models as _companies_models  # noqa: F401,E402
+from app.models.base import Base
 
 config = context.config
 if config.config_file_name is not None:
