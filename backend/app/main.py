@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.db import check_db
 from app.core.errors import add_exception_handlers
 from app.core.logging import configure_logging, get_logger
+from app.core.middleware import CorrelationIdMiddleware
 
 health_router = APIRouter(tags=["health"])
 
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(CorrelationIdMiddleware)
     add_exception_handlers(app)
 
     # Probes at root (for container/orchestrator) and under the API prefix (for the proxied UI).

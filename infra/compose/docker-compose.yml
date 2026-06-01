@@ -30,6 +30,22 @@ services:
     depends_on:
       - api
 
+  # One-shot: runs DB migrations as the OWNER role (tin) before the app starts.
+  # Migration 0002 creates the non-superuser app role (tin_app) + RLS policies.
+  migrate:
+    build:
+      context: ../../backend
+    command: alembic upgrade head
+    env_file:
+      - path: ../../backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tin:tin@db:5432/tin # owner role for DDL
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build:
       context: ../../backend
@@ -37,6 +53,8 @@ services:
     env_file:
       - path: ../../backend/.env
         required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tin_app:tin_app@db:5432/tin # RLS-enforced app role
     expose:
       - "8000"
     healthcheck:
@@ -45,6 +63,8 @@ services:
       timeout: 3s
       retries: 5
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
@@ -59,7 +79,11 @@ services:
     env_file:
       - path: ../../backend/.env
         required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tin_app:tin_app@db:5432/tin
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
       db:
@@ -72,7 +96,11 @@ services:
     env_file:
       - path: ../../backend/.env
         required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tin_app:tin_app@db:5432/tin
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
 

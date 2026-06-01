@@ -9,6 +9,7 @@ docs/architecture/06 §13.4, docs/architecture/02 §8.3).
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from uuid import UUID
 
 from sqlalchemy import text
@@ -20,6 +21,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import get_settings
+from app.core.tenancy import set_current_company_id
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
@@ -45,10 +47,25 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 async def set_current_company(session: AsyncSession, company_id: UUID) -> None:
-    """Bind the tenant for the current transaction (RLS enforcement, Sprint 1)."""
-    await session.execute(
-        text("SET LOCAL app.current_company_id = :cid"), {"cid": str(company_id)}
-    )
+    """Bind the tenant for the current transaction (RLS enforcement)."""
+    # SET LOCAL cannot be parameterised; company_id is a trusted UUID from the
+    # auth context, and we render it as a quoted literal to be safe.
+    await session.execute(text(f"SET LOCAL app.current_company_id = '{company_id}'"))
+
+
+@asynccontextmanager
+async def tenant_session(company_id: UUID) -> AsyncIterator[AsyncSession]:
+    """Yield a session bound to a tenant: sets the request context var AND the
+    transaction-local RLS GUC. All work runs inside one transaction so SET LOCAL
+    stays in effect. Used by tenant-scoped request handlers and workers."""
+    set_current_company_id(company_id)
+    try:
+        async with get_sessionmaker()() as session:
+            async with session.begin():
+                await set_current_company(session, company_id)
+                yield session
+    finally:
+        set_current_company_id(None)
 
 
 async def check_db() -> bool:

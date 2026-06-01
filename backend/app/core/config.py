@@ -24,7 +24,11 @@ class Settings(BaseSettings):
     app_env: str = "local"
 
     # --- data stores ---
+    # App connection: in Docker this is overridden to the non-superuser RLS-enforced
+    # role (tin_app). The owner/admin connection below is used by migrations and the
+    # platform cross-tenant path (bypasses RLS by design — Sprint 2+).
     database_url: str = "postgresql+asyncpg://tin:tin@db:5432/tin"
+    database_admin_url: str | None = None
     redis_url: str = "redis://redis:6379/0"
 
     # --- provider selection ---
