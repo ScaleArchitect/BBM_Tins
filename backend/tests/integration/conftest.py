@@ -27,7 +27,7 @@ OWNER_URL = os.environ.get(
     "DATABASE_ADMIN_URL", "postgresql+asyncpg://tin:tin@localhost:5432/tin"
 )
 
-PLATFORM_EMAIL = "itest-platform@tinportal.local"
+PLATFORM_EMAIL = "itest-platform@example.com"
 PLATFORM_PASSWORD = "Itest!Platform1"
 
 

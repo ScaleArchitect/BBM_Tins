@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.logging import get_logger
 from app.core.security import Principal, hash_password, normalize_email
 from app.domains.admins.models import CompanyAdmin, CompanyRole
 from app.domains.admins.repository import CompanyAdminRepository
@@ -26,6 +27,8 @@ from app.domains.audit import service as audit
 from app.domains.audit.models import ActorType
 from app.domains.companies.models import Company
 from app.providers.email.base import EmailMessage, EmailProvider
+
+_log = get_logger("admins.service")
 
 
 class AdminEmailTaken(Exception):
@@ -88,6 +91,7 @@ async def _send_admin_invite(
         )
         return True
     except Exception:  # noqa: BLE001
+        _log.warning("admin_invite_send_failed", company_slug=company.slug, to=to, exc_info=True)
         return False
 
 

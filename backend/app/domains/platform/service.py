@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.db import set_current_company
+from app.core.logging import get_logger
 from app.core.security import Principal, hash_password, normalize_email
 from app.core.tenancy import set_current_company_id
 from app.domains.admins.models import CompanyAdmin, CompanyRole
@@ -28,6 +29,8 @@ from app.domains.platform.schemas import (
     CompanyUpdate,
 )
 from app.providers.email.base import EmailMessage, EmailProvider
+
+_log = get_logger("platform.service")
 
 
 class SlugTaken(Exception):
@@ -98,6 +101,7 @@ async def _send_invite(
         )
         return True
     except Exception:  # noqa: BLE001 — invite delivery must not fail tenant creation
+        _log.warning("company_invite_send_failed", company_slug=company.slug, to=to, exc_info=True)
         return False
 
 

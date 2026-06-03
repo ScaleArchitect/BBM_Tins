@@ -62,10 +62,17 @@ class Settings(BaseSettings):
     otp_max_attempts: int = 3
     otp_lockout_seconds: int = 1800
 
+    # TTL for a pending TOTP secret held server-side between enroll and verify.
+    totp_pending_ttl_seconds: int = 600
+
     # --- admin login throttling (docs/architecture/02 §8.6) ---
     login_max_attempts: int = 5
     login_attempt_window_seconds: int = 900  # rolling window for counting failures
     login_lockout_seconds: int = 900  # cooldown once the cap is hit
+
+    # --- refresh-token endpoint rate limit (per client IP, defence in depth) ---
+    refresh_max_per_window: int = 60
+    refresh_window_seconds: int = 60
 
     # --- public base URL (invitation / set-password links) ---
     public_base_url: str = "http://localhost"

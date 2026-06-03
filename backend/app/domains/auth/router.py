@@ -7,13 +7,14 @@ httpOnly cookies so they never touch client JS (docs/architecture/05 §12.8).
 
 from __future__ import annotations
 
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.db import get_request_session
-from app.core.deps import client_ip, get_login_throttle, user_agent
-from app.core.rate_limit import Throttle
+from app.core.deps import client_ip, get_login_throttle, get_rate_limiter, get_redis, user_agent
+from app.core.rate_limit import RateLimiter, Throttle
 from app.core.security import Principal, get_current_principal
 from app.domains.auth import service
 from app.domains.auth.schemas import (
@@ -75,9 +76,21 @@ async def refresh(
     body: RefreshRequest,
     ip: str | None = Depends(client_ip),
     ua: str | None = Depends(user_agent),
+    limiter: RateLimiter = Depends(get_rate_limiter),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_request_session),
 ) -> TokenResponse:
+    allowed = await limiter.hit(
+        f"refresh:{ip or 'unknown'}",
+        settings.refresh_max_per_window,
+        settings.refresh_window_seconds,
+    )
+    if not allowed:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many refresh attempts. Please slow down.",
+            headers={"Retry-After": str(settings.refresh_window_seconds)},
+        )
     try:
         return await service.refresh(
             session, raw_refresh=body.refresh_token, settings=settings, ip=ip, user_agent=ua
@@ -107,26 +120,31 @@ async def me(
     principal: Principal = Depends(get_current_principal),
     session: AsyncSession = Depends(get_request_session),
 ) -> PrincipalInfo:
-    account = await service._load_account(session, principal)  # noqa: SLF001 — internal reuse
+    account = await service.load_account(session, principal)
+    if account is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account no longer available")
     return PrincipalInfo(
         id=principal.id,
         principal_type=principal.principal_type,
         role=principal.role,
         company_id=principal.company_id,
-        email=account.email if account else "",
+        email=account.email,
     )
 
 
 @router.post("/totp/enroll", response_model=TotpEnrollResponse, summary="Begin TOTP enrolment")
 async def totp_enroll(
     principal: Principal = Depends(get_current_principal),
+    redis: aioredis.Redis = Depends(get_redis),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_request_session),
 ) -> TotpEnrollResponse:
-    account = await service._load_account(session, principal)  # noqa: SLF001
+    account = await service.load_account(session, principal)
     if account is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Account not found")
-    secret, uri = await service.totp_enroll(account.email, settings)
+    secret, uri = await service.totp_enroll(
+        redis, principal=principal, account_email=account.email, settings=settings
+    )
     return TotpEnrollResponse(secret=secret, otpauth_url=uri)
 
 
@@ -134,9 +152,10 @@ async def totp_enroll(
 async def totp_verify(
     body: TotpVerifyRequest,
     principal: Principal = Depends(get_current_principal),
+    redis: aioredis.Redis = Depends(get_redis),
     session: AsyncSession = Depends(get_request_session),
 ) -> dict[str, bool]:
-    ok = await service.totp_verify(session, principal=principal, secret=body.secret, code=body.code)
+    ok = await service.totp_verify(session, redis, principal=principal, code=body.code)
     if not ok:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid TOTP code")
     return {"enrolled": True}

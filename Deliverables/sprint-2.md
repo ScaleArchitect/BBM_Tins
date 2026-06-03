@@ -29,8 +29,8 @@ Sprint 2 implements the complete authentication system, RBAC framework, and comp
 
 #### Rate Limiting (`app/core/rate_limit.py`)
 - **Redis Backend**: Fixed-window counter for distributed deployments
-- **In-Memory Fallback**: Per-identity login throttle with exponential backoff (dev/testing)
-- **Lockout Mechanism**: Progressive delays after failed attempts
+- **In-Memory Fallback**: Per-identity login throttle for dev/testing
+- **Lockout Mechanism**: Fixed cooldown after the failure cap is reached
 - **Reuse Detection**: Per-identity state tracking across sessions
 
 ### Database & Data Models
@@ -82,8 +82,8 @@ Sprint 2 implements the complete authentication system, RBAC framework, and comp
 
 #### Company Model & Service (`app/domains/platform/`)
 - **Create**: Atomic operation (company + settings + branding + owner admin + invite email)
-- **Status Management**: ONBOARDING → ACTIVE → SUSPENDED
-- **Subscription Tiers**: FREE, PRO, ENTERPRISE (payment integration placeholder)
+- **Status Management**: PENDING → ACTIVE → SUSPENDED → CANCELLED
+- **Subscription Status**: TRIAL, ACTIVE, PAST_DUE, CANCELLED (payment integration placeholder)
 - **Slug-based Identity**: DNS-label safe identifiers
 - **Audit Logging**: Status/subscription changes
 

@@ -68,7 +68,7 @@
 
 3. Owner navigates to /admin/branding
    → GET /api/proxy/admin/branding
-   → RLS filters to company (compan_id = owner.company_id)
+   → RLS filters to company (company_id = owner.company_id)
    → Current colors: #0066FF (primary), #666666 (secondary)
 
 4. Owner updates branding:
@@ -157,16 +157,14 @@
    → Error: InvalidCredentials, HTTP 401
 
 2. Attacker retries (attempts 1-5)
-   → Each failure increments throttle counter per email
-   → After attempt 3: 1-second delay
-   → After attempt 4: 2-second delay
-   → After attempt 5: 4-second delay
+   → Each failure increments the per-identity counter (rolling window)
+   → On reaching the cap (5), the identity is locked for a fixed cooldown
 
 3. Legitimate owner tries login
    → Email: viewer@acme.com, password: "correct"
-   → Throttle still active (failure count > 0)
-   → Response: AccountLocked, HTTP 429
-   → Must wait for backoff window (exponential by attempt count)
+   → Lockout still active (cap reached)
+   → Response: AccountLocked, HTTP 423
+   → Must wait for the fixed cooldown window to elapse
 
 4. After waiting, owner retries with correct password
    → Success ✓
@@ -175,9 +173,9 @@
 ```
 
 **Expected Outcome:**
-✓ Failed attempts tracked per email
-✓ Progressive backoff delays effective
-✓ Legitimate users affected (but recoverable)
+✓ Failed attempts tracked per identity (slug:email)
+✓ Fixed cooldown lockout once the cap is reached
+✓ Legitimate users affected (but recoverable after cooldown)
 ✓ Lockout state per-identity (doesn't affect other users)
 
 ---
@@ -232,10 +230,9 @@
 2. Company owner tries login
    → POST /api/proxy/auth/login
    → Email: admin@acme.com, password: "correct"
-   → Password verified ✓
-   → Company status checked: SUSPENDED ✗
-   → Error: TenantUnavailable, HTTP 423
-   → Response: "Your organization is temporarily suspended"
+   → Company resolved by slug, status checked: SUSPENDED ✗ (before password verify)
+   → Error: TenantUnavailable, HTTP 403
+   → Response: "This account is not available."
 
 3. Owner cannot proceed
    → Tokens NOT issued
@@ -245,7 +242,7 @@
 
 **Expected Outcome:**
 ✓ Suspended tenants block login
-✓ No token bypass (checked after password verify)
+✓ No token bypass (status checked before password verify)
 ✓ Clear error messaging
 ✓ Prevents unauthorized access during suspension window
 

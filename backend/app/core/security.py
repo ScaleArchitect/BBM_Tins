@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import hmac
+import tempfile
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -92,6 +93,14 @@ def _keypair() -> _KeyPair:
     if priv_path.is_file() and pub_path.is_file():
         return _KeyPair(priv_path.read_text(), pub_path.read_text())
 
+    # No provisioned keys (local/dev). Reuse a stable per-machine dev keypair so
+    # tokens survive process restarts; only generate a fresh one if it's missing.
+    dev_dir = Path(tempfile.gettempdir()) / "tin-portal-dev-jwt"
+    dev_priv, dev_pub = dev_dir / "private.pem", dev_dir / "public.pem"
+    if dev_priv.is_file() and dev_pub.is_file():
+        _log.info("jwt_dev_keypair_reused", detail=str(dev_dir))
+        return _KeyPair(dev_priv.read_text(), dev_pub.read_text())
+
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     private_pem = key.private_bytes(
         encoding=serialization.Encoding.PEM,
@@ -106,10 +115,31 @@ def _keypair() -> _KeyPair:
         )
         .decode()
     )
+
+    persisted = False
+    try:
+        dev_dir.mkdir(parents=True, exist_ok=True)
+        dev_priv.write_text(private_pem)
+        dev_pub.write_text(public_pem)
+        try:  # best-effort tighten perms (POSIX only)
+            dev_priv.chmod(0o600)
+        except OSError:
+            pass
+        persisted = True
+    except OSError:
+        pass
+
     _log.warning(
-        "jwt_ephemeral_keypair",
-        detail="JWT key files not found; generated an ephemeral dev keypair. "
-        "Tokens will not survive a process restart. Provision keys in production.",
+        "jwt_dev_keypair_generated",
+        detail=(
+            "JWT key files not found; generated a dev keypair. "
+            + (
+                f"Persisted to {dev_dir} so tokens survive restarts. "
+                if persisted
+                else "Could not persist it; tokens will not survive a restart. "
+            )
+            + "Provision keys in production."
+        ),
         private_key_path=str(priv_path),
     )
     return _KeyPair(private_pem, public_pem)

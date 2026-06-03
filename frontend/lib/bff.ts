@@ -3,10 +3,25 @@
 
 export type Problem = { title?: string; detail?: string; status?: number };
 
+const CSRF_HEADER = "x-csrf-token";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function readCsrfToken(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const match = document.cookie.match(/(?:^|;\s*)tin_csrf=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
 export async function bffFetch(path: string, init?: RequestInit): Promise<Response> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const csrf = SAFE_METHODS.has(method) ? undefined : readCsrfToken();
   return fetch(`/api/proxy${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(csrf ? { [CSRF_HEADER]: csrf } : {}),
+      ...(init?.headers ?? {}),
+    },
     cache: "no-store",
   });
 }

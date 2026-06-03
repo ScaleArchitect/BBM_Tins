@@ -20,6 +20,7 @@ import secrets
 from uuid import UUID, uuid4
 
 import pyotp
+import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -176,7 +177,9 @@ async def login(
 
     if account.totp_secret:
         if not totp_code or not pyotp.TOTP(account.totp_secret).verify(totp_code, valid_window=1):
-            retry = await throttle.record_failure(identity)
+            retry = await _record_failure(
+                session, throttle, identity, actor_type, email, company_id
+            )
             if retry:
                 raise AccountLocked(retry)
             raise TotpRequired
@@ -342,7 +345,8 @@ async def logout(
     )
 
 
-async def _load_account(session: AsyncSession, principal: JwtPrincipal):  # noqa: ANN202
+async def load_account(session: AsyncSession, principal: JwtPrincipal):  # noqa: ANN202
+    """Load the platform/company admin behind a principal (None if missing/unscoped)."""
     if principal.is_platform:
         return await repo.get_platform_admin(session, principal.id)
     if principal.company_id is None:
@@ -352,27 +356,56 @@ async def _load_account(session: AsyncSession, principal: JwtPrincipal):  # noqa
     return await repo.get_company_admin(session, principal.id)
 
 
-async def totp_enroll(account_email: str, settings: Settings) -> tuple[str, str]:
-    """Generate a TOTP secret + provisioning URI. Not persisted until verified."""
+async def _totp_pending_key(principal: JwtPrincipal) -> str:
+    return f"totp:pending:{principal.principal_type}:{principal.id}"
+
+
+async def totp_enroll(
+    redis: aioredis.Redis,
+    *,
+    principal: JwtPrincipal,
+    account_email: str,
+    settings: Settings,
+) -> tuple[str, str]:
+    """Generate a TOTP secret + provisioning URI.
+
+    The secret is held **server-side** (short-TTL Redis key) until a valid code
+    confirms it in :func:`totp_verify`. It is returned here only so the client can
+    render the QR/manual-entry code during setup; verification never trusts a
+    client-supplied secret.
+    """
     secret = pyotp.random_base32()
     uri = pyotp.TOTP(secret).provisioning_uri(name=account_email, issuer_name=settings.jwt_issuer)
+    await redis.set(
+        await _totp_pending_key(principal), secret, ex=settings.totp_pending_ttl_seconds
+    )
     return secret, uri
 
 
 async def totp_verify(
     session: AsyncSession,
+    redis: aioredis.Redis,
     *,
     principal: JwtPrincipal,
-    secret: str,
     code: str,
 ) -> bool:
-    """Confirm a pending secret with a code and persist it on the account."""
+    """Confirm the server-held pending secret with a code and persist it.
+
+    Reads the pending secret bound to this principal (never accepts it from the
+    client), verifies the code, and on success persists it to the account and
+    clears the pending key.
+    """
+    pending_key = await _totp_pending_key(principal)
+    secret = await redis.get(pending_key)
+    if not secret:
+        return False
     if not pyotp.TOTP(secret).verify(code, valid_window=1):
         return False
-    account = await _load_account(session, principal)
+    account = await load_account(session, principal)
     if account is None:
         raise InvalidCredentials
     account.totp_secret = secret
+    await redis.delete(pending_key)
     await audit.record(
         session,
         actor_type=_actor(principal.principal_type),

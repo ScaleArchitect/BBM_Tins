@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.repository import TenantRepository
 from app.domains.admins.models import CompanyAdmin, CompanyRole
@@ -28,10 +28,11 @@ class CompanyAdminRepository(TenantRepository[CompanyAdmin]):
         return await self.session.scalar(stmt)
 
     async def count_active_owners(self, *, exclude_id=None) -> int:
-        stmt = select(CompanyAdmin).where(
+        stmt = select(func.count()).select_from(CompanyAdmin).where(
             CompanyAdmin.company_id == self.company_id,
             CompanyAdmin.role == CompanyRole.COMPANY_OWNER,
             CompanyAdmin.is_active.is_(True),
         )
-        owners = (await self.session.scalars(stmt)).all()
-        return sum(1 for o in owners if o.id != exclude_id)
+        if exclude_id is not None:
+            stmt = stmt.where(CompanyAdmin.id != exclude_id)
+        return await self.session.scalar(stmt) or 0

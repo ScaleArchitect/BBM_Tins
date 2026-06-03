@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   ACCESS_COOKIE,
   API_INTERNAL,
+  CSRF_COOKIE,
   REFRESH_COOKIE,
   accessCookieOptions,
+  csrfCookieOptions,
+  newCsrfToken,
   refreshCookieOptions,
 } from "@/lib/server/backend";
 
@@ -25,5 +28,6 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({ principal: data.principal });
   res.cookies.set(ACCESS_COOKIE, data.access_token, accessCookieOptions(data.expires_in));
   res.cookies.set(REFRESH_COOKIE, data.refresh_token, refreshCookieOptions());
+  res.cookies.set(CSRF_COOKIE, newCsrfToken(), csrfCookieOptions());
   return res;
 }

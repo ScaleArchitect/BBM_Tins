@@ -48,7 +48,6 @@ class TotpEnrollResponse(BaseModel):
 
 
 class TotpVerifyRequest(BaseModel):
-    # The pending secret from /totp/enroll is held by the client during setup and
-    # persisted only once a valid code confirms it (no extra DB state needed).
-    secret: str = Field(min_length=16, max_length=64)
+    # The pending secret is held server-side (keyed by principal) between
+    # /totp/enroll and /totp/verify; the client only submits the code.
     code: str = Field(min_length=6, max_length=10)

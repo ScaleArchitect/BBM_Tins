@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ACCESS_COOKIE, API_INTERNAL, REFRESH_COOKIE } from "@/lib/server/backend";
+import { ACCESS_COOKIE, API_INTERNAL, CSRF_COOKIE, REFRESH_COOKIE } from "@/lib/server/backend";
 
 // BFF logout: revoke the refresh-token family server-side, then clear cookies.
 export async function POST(req: NextRequest) {
@@ -19,5 +19,6 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({ ok: true });
   res.cookies.delete(ACCESS_COOKIE);
   res.cookies.delete(REFRESH_COOKIE);
+  res.cookies.delete(CSRF_COOKIE);
   return res;
 }

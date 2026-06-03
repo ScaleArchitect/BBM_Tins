@@ -50,9 +50,13 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 async def set_current_company(session: AsyncSession, company_id: UUID) -> None:
     """Bind the tenant for the current transaction (RLS enforcement)."""
-    # SET LOCAL cannot be parameterised; company_id is a trusted UUID from the
-    # auth context, and we render it as a quoted literal to be safe.
-    await session.execute(text(f"SET LOCAL app.current_company_id = '{company_id}'"))
+    # ``SET LOCAL`` cannot bind parameters, but ``set_config(..., is_local => true)``
+    # can — so the company id is passed as a bound parameter rather than rendered
+    # into SQL, avoiding any injection-shaped pattern even though it is a trusted UUID.
+    await session.execute(
+        text("SELECT set_config('app.current_company_id', :company_id, true)"),
+        {"company_id": str(company_id)},
+    )
 
 
 @asynccontextmanager
